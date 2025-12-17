@@ -1,66 +1,71 @@
 import streamlit as st
-import os
-import sys
-import subprocess
-
-# --- 🏴‍☠️ 绝杀技：运行时自动安装依赖 ---
-# 这段代码会检查服务器有没有 google-generative-ai，没有就当场安装
-try:
-    import google.generative_ai as genai
-except ImportError:
-    st.toast("正在初始化 AI 引擎，请稍候...", icon="🔧")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-generative-ai"])
-    import google.generative_ai as genai
+import requests
+import json
 
 # --- 页面配置 ---
 st.set_page_config(page_title="软考高项论文AI阅卷", page_icon="📝", layout="wide")
 
 st.title("📝 软考高项论文 AI 阅卷老师")
-st.info("💡 提示：这是一个 MVP 原型，旨在演示 AI 批改能力。")
+st.caption("🚀 极速版 - 采用 REST API 直连技术")
 
-# --- 侧边栏 ---
+# --- 侧边栏配置 ---
 with st.sidebar:
     st.header("🔑 身份验证")
     api_key = st.text_input("请输入 Google API Key", type="password")
-    st.markdown("[获取免费 Key](https://aistudio.google.com/app/apikey)")
-    st.markdown("---")
-    st.markdown("### 商业版功能预览")
-    st.write("✅ 历年真题库")
-    st.write("✅ 考点押题")
-    st.write("✅ 1对1 私教")
+    st.markdown("[点击获取免费 Key](https://aistudio.google.com/app/apikey)")
+    
+    st.divider()
+    st.info("💡 为什么用这个版本？\n因为 Streamlit 服务器有时候装不上 AI 插件，这个版本使用了更底层的 Web 通信技术，更加稳定！")
 
-# --- 主逻辑 ---
-essay_input = st.text_area("在此粘贴您的论文范文 (2000字以内):", height=400)
-
-if st.button("🚀 开始智能批改", type="primary"):
-    if not api_key:
-        st.error("❌ 请先在左侧输入 API Key")
-    elif not essay_input:
-        st.warning("⚠️ 请先粘贴论文内容")
+# --- 核心逻辑：直接发网络请求给 Google ---
+def call_gemini_api(key, text):
+    # 这是 Google Gemini 的直接访问地址
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+    headers = {'Content-Type': 'application/json'}
+    
+    # 构造像阅卷老师一样的提示词
+    prompt_text = f"""
+    你是一位严厉的软考高项（信息系统项目管理师）阅卷专家。
+    请对以下论文进行评分（满分75分，45分及格）。
+    
+    输出要求：
+    1. 给出预估分数。
+    2. 列出3个扣分点（致命硬伤）。
+    3. 给出分段修改建议。
+    
+    学生论文内容：
+    {text}
+    """
+    
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
+    }
+    
+    # 发送请求
+    response = requests.post(url, headers=headers, json=data)
+    
+    if response.status_code == 200:
+        return response.json()['candidates'][0]['content']['parts'][0]['text']
     else:
-        try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-pro')
-            
-            prompt = f"""
-            你是一位严厉的软考高项（信息系统项目管理师）阅卷专家。
-            请对以下论文进行评分（满分75分，45分及格）。
-            
-            请按以下格式输出：
-            1. **预估分数**：X分
-            2. **致命硬伤**：(列出3点)
-            3. **修改建议**：(针对摘要、正文、结尾给出具体建议)
-            
-            论文内容：
-            {essay_input}
-            """
-            
-            with st.spinner("AI 阅卷老师正在逐字审读..."):
-                response = model.generate_content(prompt)
-                
-            st.success("✅ 批改完成！")
-            st.markdown("### 📊 阅卷报告")
-            st.markdown(response.text)
-            
-        except Exception as e:
-            st.error(f"发生错误: {e}")
+        return f"Error: {response.text}"
+
+# --- 界面交互 ---
+essay_input = st.text_area("请在此粘贴论文内容 (建议2000字以内):", height=400)
+
+if st.button("🚀 开始阅卷", type="primary"):
+    if not api_key:
+        st.error("❌ 必须要填 API Key 才能用哦！")
+    elif not essay_input:
+        st.warning("⚠️ 没看到论文，请先粘贴内容！")
+    else:
+        with st.spinner("正在通过加密通道连接 Google 大脑..."):
+            try:
+                result = call_gemini_api(api_key, essay_input)
+                st.success("✅ 批改完成！")
+                st.markdown("### 📊 阅卷报告")
+                st.divider()
+                st.markdown(result)
+            except Exception as e:
+                st.error(f"网络请求出错: {e}")
