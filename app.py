@@ -20,7 +20,7 @@ with st.sidebar:
 # --- 核心逻辑：直接发网络请求给 Google ---
 def call_gemini_api(key, text):
     # 这是 Google Gemini 的直接访问地址
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key={key}"
     headers = {'Content-Type': 'application/json'}
     
     # 构造像阅卷老师一样的提示词
